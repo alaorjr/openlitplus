@@ -21,11 +21,29 @@ export const authOptions = {
 			if (account) {
 				token.accessToken = account.access_token;
 			}
-
+			// If user object exists, it's a new sign-in or registration
 			if (user?.id) {
 				token.id = user.id;
+				// The `user` object from authorize should have isAdmin if selected
+				// If `user` comes from an OAuth provider, it might not have `isAdmin`
+				// For credentials, `getUserByEmail` (used in login) or `createNewUser` should provide it.
+				// Let's explicitly fetch from DB to be sure for all cases if `user.isAdmin` isn't directly on `user`.
+				// However, `user` from `authorize` should be our DB user.
+				// @ts-ignore // user might not have isAdmin directly typed here from NextAuth types
+				if (typeof user.isAdmin === 'boolean') {
+				// @ts-ignore
+					token.isAdmin = user.isAdmin;
+				} else {
+					// Fallback if user object doesn't have isAdmin (e.g. OAuth initial link)
+					const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { isAdmin: true } });
+					token.isAdmin = dbUser?.isAdmin || false;
+				}
+			} else if (token.id) {
+				// For subsequent JWT calls, ensure isAdmin is fresh from DB
+				// This is important if admin status can change during a session
+				const dbUser = await prisma.user.findUnique({ where: { id: token.id as string }, select: { isAdmin: true } });
+				token.isAdmin = dbUser?.isAdmin || false;
 			}
-
 			return token;
 		},
 		signIn: async ({ user, account, profile }) => {
@@ -57,6 +75,7 @@ export const authOptions = {
 		async session({ session, token }: { session: any; token: any }) {
 			try {
 				session.user.id = token.id;
+				session.user.isAdmin = token.isAdmin || false; // Ensure isAdmin is passed to session
 			} catch (e) {
 				console.log(e);
 			}
@@ -92,30 +111,6 @@ export const authOptions = {
 
 				if (passwordsMatch) return user;
 				return null;
-			},
-		}),
-		CredentialsProvider({
-			id: "register",
-			name: "Credentials Register",
-			credentials: {
-				email: {
-					label: "Email",
-					type: "email",
-					placeholder: "openlit@openlit.io",
-				},
-				password: { label: "Password", type: "password" },
-			},
-			async authorize(credentials) {
-				if (!credentials?.email || !credentials?.password) return null;
-				const [err, user] = await asaw(
-					createNewUser({
-						email: credentials?.email,
-						password: credentials?.password,
-					})
-				);
-
-				if (err) throw new Error(err);
-				return user;
 			},
 		}),
 	],

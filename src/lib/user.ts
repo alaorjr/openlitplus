@@ -59,9 +59,11 @@ export const createNewUser = async (
 	{
 		email,
 		password,
+		isAdmin,
 	}: {
 		email: string;
 		password: string;
+		isAdmin?: boolean;
 	},
 	options?: { selectPassword?: boolean }
 ) => {
@@ -70,10 +72,14 @@ export const createNewUser = async (
 
 	const hashedPassword = getHashedPassword(password);
 
+	const usersCount = await prisma.user.count();
+	const determinedIsAdminValue = usersCount === 0 ? true : isAdmin || false;
+
 	let createdUser = await prisma.user.create({
 		data: {
 			email,
 			password: hashedPassword,
+			isAdmin: determinedIsAdminValue,
 		},
 	});
 

@@ -19,8 +19,10 @@ import {
 	SettingsIcon,
 	ShieldAlert,
 	SquarePlay,
+	Users, // Import Users icon
 } from "lucide-react";
 import VersionInfo from "./version-Info";
+import { useSession } from "next-auth/react"; // Import useSession
 
 type SidebarItemProps = {
 	className?: string;
@@ -68,6 +70,7 @@ const SIDEBAR_ITEMS: SidebarItemProps[] = [
 		icon: <SettingsIcon className={ICON_CLASSES} />,
 		text: "Settings",
 		link: "/settings",
+	// User Management will be added here conditionally below
 	},
 ];
 
@@ -125,6 +128,31 @@ const SidebarItem = (props: SidebarItemProps) => {
 
 export default function Sidebar() {
 	const pathname = usePathname();
+	const { data: session } = useSession();
+
+	// Dynamically construct sidebar items based on admin status
+	const getSidebarItems = () => {
+		let items = [...SIDEBAR_ITEMS]; // Start with base items
+
+		// Find settings index to insert User Management after it
+		const settingsIndex = items.findIndex(item => item.link === "/settings");
+
+		if (session?.user?.isAdmin) {
+			const userManagementItem: SidebarItemProps = {
+				icon: <Users className={ICON_CLASSES} />,
+				text: "User Management",
+				link: "/settings/users",
+			};
+			if (settingsIndex !== -1) {
+				items.splice(settingsIndex + 1, 0, userManagementItem); // Insert after Settings
+			} else {
+				items.push(userManagementItem); // Or add to end if Settings not found (fallback)
+			}
+		}
+		return items;
+	};
+
+	const currentSidebarItems = getSidebarItems();
 
 	return (
 		<aside
@@ -144,7 +172,7 @@ export default function Sidebar() {
 				</Button>
 			</div>
 			<nav className="grid gap-1 p-2 pt-4">
-				{SIDEBAR_ITEMS.map((item, index) => (
+				{currentSidebarItems.map((item, index) => (
 					<SidebarItem
 						key={`sidebar-top-${index}`}
 						className={`${
